@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # -------------------- TimescaleDB -------------------------
   timescaledb:
     image: timescale/timescaledb:latest-pg14
     container_name: timescaledb
@@ -19,6 +20,8 @@ services:
       retries: 5
     networks:
       - kafka-net
+
+  # -------------------- Grafana -------------------------
   grafana:
     image: grafana/grafana-enterprise
     container_name: grafana
@@ -29,7 +32,8 @@ services:
       - grafana-storage:/var/lib/grafana
     networks:
       - kafka-net
-  #-------------------- kafka config -------------------------
+
+  # -------------------- Kafka -------------------------
   kafka:
     hostname: kafka
     image: bitnami/kafka:latest
@@ -60,6 +64,7 @@ services:
       retries: 5
       start_period: 30s
 
+  # -------------------- AKHQ -------------------------
   akhq:
     image: tchiotludo/akhq
     container_name: akhq
@@ -84,42 +89,67 @@ services:
       retries: 5
       start_period: 30s
 
-  #---------------------- mongo config ---------------------------
-  # ----- mongodb:
-  #   image: mongo:6.0
-  #   container_name: mongodb
-  #   ports:
-  #     - "27017:27017"
-  #   volumes:
-  #     - ./mongo_data:/data/db
-  #   networks:
-  #     - kafka-net
-  #   healthcheck:
-  #     test: [ "CMD", "mongo", "--eval", "db.adminCommand('ping')" ]
-  #     interval: 15s
-  #     timeout: 10s
-  #     retries: 5
-  #     start_period: 30s
-  # mongo-express:
-  #   image: mongo-express:latest
-  #   container_name: mongo-express
-  #   restart: always
-  #   ports:
-  #     - "8081:8081"
-  #   environment:
-  #     ME_CONFIG_MONGODB_SERVER: mongodb
-  #     ME_CONFIG_MONGODB_PORT: 27017
-  #     ME_CONFIG_BASICAUTH_USERNAME: admin
-  #     ME_CONFIG_BASICAUTH_PASSWORD: secret
-  #   depends_on:
-  #     - mongodb
-  #   networks:
-  #     - kafka-net
+  # -------------------- Redis -------------------------
+  redis:
+    image: redis:latest
+    container_name: redis_server
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "SuperSecret123"]
+    networks:
+      - kafka-net
 
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: redis_commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379:0:SuperSecret123
+    ports:
+      - "8082:8081"   # évite conflit avec mongo-express
+    depends_on:
+      - redis
+    networks:
+      - kafka-net
+
+  # -------------------- MongoDB -------------------------
+  mongodb:
+    image: mongo:6.0
+    container_name: mongodb_server
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - kafka-net
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo_express
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: example
+      ME_CONFIG_MONGODB_SERVER: mongodb
+    depends_on:
+      - mongodb
+    networks:
+      - kafka-net
+
+# -------------------- Volumes -------------------------
 volumes:
   grafana-storage: {}
   kafka_data:
-  # mongo_data:   # commented out since MongoDB is disabled
+  redis_data:
+  mongo_data:
 
+# -------------------- Networks -------------------------
 networks:
   kafka-net:
